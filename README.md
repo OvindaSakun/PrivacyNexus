@@ -38,13 +38,13 @@ Because the HIDS module relies on `strace` to hook into live processes, this age
 1. Clone the repository.
 2. Install system graphical dependencies (if missing):
 
-   'sudo apt update'
-   'sudo apt install python3-tk strace'
+   '''sudo apt update
+   '''sudo apt install python3-tk strace
 
 3. Install Python dependencies:
 
-    'pip install -r requirements.txt'
+    '''pip install -r requirements.txt
 
 4. Run the agent (preserving the GUI display environment):
 
-    'sudo -E python3 security_agent.py'
+    '''sudo -E python3 security_agent.py
