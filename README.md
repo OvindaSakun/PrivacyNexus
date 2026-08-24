@@ -1,8 +1,10 @@
 # PrivacyNexus - Unified Endpoint Security Agent 🛡️
 
-**PrivacyNexus** is a modular, AI-driven endpoint security agent (SIEM/EDR) designed for lightweight Linux distributions. This repository contains the core local security suite developed as part of a BSc (Hons) Computer Networks dissertation focusing on biometric-authenticated, portable secure operating systems.
+PrivacyNexus is a modular, AI-driven endpoint security agent (SIEM/EDR) designed for lightweight Linux distributions. This repository contains the core local security suite developed as part of a BSc (Hons) Computer Networks dissertation focusing on biometric-authenticated, portable secure operating systems.
 
-The agent runs completely locally with a non-blocking `CustomTkinter` graphical dashboard, utilizing multithreading to manage real-time background telemetry without interrupting the user experience.
+The agent runs completely locally with a non-blocking CustomTkinter graphical dashboard, utilizing multithreading to manage real-time background telemetry without interrupting the user experience.
+
+---
 
 ## 🧠 Core Architecture
 
@@ -23,6 +25,8 @@ The system acts as a central Security Decision Engine integrating two distinct m
 * **Database:** Logs all security events locally to an SQLite database (`security_events.db`).
 * **Correlation Logic:** If the DLP module detects high-confidence sensitive data (e.g., Financial records or Credentials) being accessed, and the HIDS module simultaneously detects an anomalous/malicious process executing within a 60-second sliding window, the engine triggers a `CRITICAL_ESCALATION` alert to terminate the threat and protect the data.
 
+---
+
 ## 🛠️ Technology Stack
 * **Language:** Python 3
 * **Machine Learning:** `scikit-learn` (v1.6.1), `joblib`, `pickle`
@@ -30,21 +34,25 @@ The system acts as a central Security Decision Engine integrating two distinct m
 * **GUI:** `CustomTkinter`
 * **Database:** SQLite3
 
+---
+
 ## 🚀 Installation & Usage
 
 **Prerequisites:** 
 Because the HIDS module relies on `strace` to hook into live processes, this agent is designed for Linux environments and requires elevated privileges.
 
-1. Clone the repository.
-2. Install system graphical dependencies (if missing):
+### 1. System Dependencies
+```bash
+sudo apt update
+sudo apt install python3-tk strace
+```
 
-   '''sudo apt update
-   '''sudo apt install python3-tk strace
+### 2. Python Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-3. Install Python dependencies:
-
-    '''pip install -r requirements.txt
-
-4. Run the agent (preserving the GUI display environment):
-
-    '''sudo -E python3 security_agent.py
+### 3. Run Agent
+```bash
+sudo -E python3 security_agent.py
+```
