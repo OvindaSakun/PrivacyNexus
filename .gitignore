@@ -8,3 +8,6 @@ __pycache__/
 
 # Local Database
 security_events.db
+
+# Test Scripts
+auto_test_escalation.py
