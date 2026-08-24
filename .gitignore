@@ -1,0 +1,10 @@
+# Virtual Environment
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Local Database
+security_events.db

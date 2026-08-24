@@ -1,0 +1,7 @@
+customtkinter
+psutil
+watchdog
+scikit-learn==1.6.1
+joblib
+PyPDF2
+python-docx
