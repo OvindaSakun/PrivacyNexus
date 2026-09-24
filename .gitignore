@@ -1,0 +1,24 @@
+# Ignore VM files and Virtual Hard Disks
+HDD/
+*.vmdk
+*.vmem
+*.vmx
+*.iso
+*.ova
+
+# Ignore PlatformIO and IDE build caches
+.pio/
+.vscode/
+
+# Ignore Python cache & compiled binaries
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+
+# Ignore OS / Environment files
+venv/
+.env
+Thumbs.db
+security_agent/
