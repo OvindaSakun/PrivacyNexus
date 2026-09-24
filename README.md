@@ -1,152 +1,127 @@
-# PrivacyNexus
+# PrivacyNexus 🛡️
 
-[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
-[![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
-[![ESP32](https://img.shields.io/badge/ESP32-Hardware-success.svg)](https://www.espressif.com/en/products/socs/esp32)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Architecture](https://img.shields.io/badge/Architecture-Host%2FGuest%2FIoT-purple.svg)](#architecture)
+![Python](https://img.shields.io/badge/Python-3.x-blue?style=flat-square&logo=python&logoColor=white)
+![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange?style=flat-square&logo=platformio&logoColor=white)
+![ESP32](https://img.shields.io/badge/ESP32-Firmware-red?style=flat-square&logo=espressif&logoColor=white)
+![VMware](https://img.shields.io/badge/VMware-Workstation-blue?style=flat-square&logo=vmware&logoColor=white)
+![CustomTkinter](https://img.shields.io/badge/UI-CustomTkinter-brightgreen?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-## 📌 Executive Overview
+## Executive Summary
+PrivacyNexus is a biometric-authenticated, portable secure OS architecture designed for untrusted host isolation. It bridges hardware-level biometric validation (ESP32 + AS608 optical fingerprint sensor) with host-level virtualization controls. Access to isolated Virtual Machines is strictly guarded; the system will not launch an OS environment until a cryptographically verified and AES-encrypted authentication payload is successfully transmitted from the hardware token to the host orchestrator. 
 
-**PrivacyNexus** is a Biometric-Authenticated Portable Secure OS and Workspace Architecture developed as a Final Year Research Project. It provides a secure, portable computing environment by combining hardware-level biometric authentication, an encrypted portable virtual machine (VM) guest, and host-side orchestration.
+> **Companion Repository Callout:** The in-guest ML-driven DLP/HIDS monitoring agents for the isolated environments reside in the dedicated companion repository: [PrivacyNexus-Agent](https://github.com/OvindaSakun/PrivacyNexus-Agent).
 
-By linking an ESP32 microcontroller with an AS608 optical fingerprint sensor to a Windows host loader, PrivacyNexus ensures that the secure workspace (running Tiny Core or antiX Linux) is only accessible to authorized users.
-
----
-
-## 🏗️ System Architecture
-
-PrivacyNexus operates across three interconnected layers: IoT Hardware, Host OS, and Guest OS.
-
-```mermaid
-graph TD
-    subgraph IoT Hardware
-        A[ESP32 Microcontroller] -->|Biometric Scan| B(AS608 Fingerprint Sensor)
-        B -->|Validation| A
-        A -->|Serial/HTTP Auth Signal| C
-    end
-
-    subgraph Windows Host
-        C[Host Loader `vmware_os_loader.py`]
-        D[GUI App `gui_app.py`]
-        E[HTTP Receiver `http_receiver.py`]
-        C <--> D
-        E --> C
-    end
-
-    subgraph Guest VM
-        F[Encrypted Portable VM]
-        G[Tiny Core / antiX Linux]
-        F --> G
-        H[PrivacyNexus Security Agent]
-        G --> H
-    end
-
-    C -->|Mount & Launch| F
-    H -.->|Telemetry & Alerts| E
-```
-
-### Workflow Breakdown
-1. **Biometric Authentication:** The user authenticates via the ESP32 + AS608 sensor.
-2. **Authorization Dispatch:** Upon success, the ESP32 dispatches a secure authorization signal to the host.
-3. **Host Orchestration:** The `gui_app.py` displays progress, while `vmware_os_loader.py` verifies hardware state and securely mounts the encrypted portable VM.
-4. **Secure Execution:** The VM boots, running the internal Security Agent for monitoring.
-
----
-
-## 📂 Project Directory Structure
+## Architecture Workflow
 
 ```text
-PrivacyNexus/
-├── vmware_os_loader.py      # Windows host-side launcher & VM orchestrator
-├── gui_app.py               # Desktop user interface (CustomTkinter)
-├── http_receiver.py         # Local communication listener for telemetry
-├── build_executables.py     # PyInstaller script for host packaging
-├── requirements.txt         # Python dependencies
-├── platformio.ini           # PlatformIO configuration for ESP32
-├── src/                     # ESP32 firmware source code
-│   └── main.cpp             # Embedded biometric verification logic
-└── HDD/                     # [IGNORED] VMware virtual disk images (See Setup)
+[ESP32 + AS608 Fingerprint Sensor]
+         |
+         | (Fingerprint Match & AES-128 Encryption)
+         |
+         v
+[Serial / Wi-Fi SoftAP / UDP Broadcast / HTTP POST]
+         |
+         +-------------------------------------------------+
+         |                                                 |
+         v                                                 v
+[Host GUI (gui_app.py)] <-----------------> [Receiver (http_receiver.py)]
+ (User Enrollment & Logging)                  (Payload Decryption & Auth Token Drop)
+         |                                                 |
+         |                                                 | (Drops 'auth_success.enc' in C:\tmp)
+         v                                                 v
+[VM Orchestrator (vmware_os_loader.py)] <------------------+
+         | (Verifies Token, Consumes/Deletes Token)
+         v
+[Encrypted Guest VM Launch via vmrun]
 ```
 
-> [!WARNING]
-> The `HDD/` directory containing the VMware virtual disk images is intentionally excluded from version control due to file size constraints. You must set this up manually.
+## Implementation Details & Protocols
 
----
+### Firmware & Hardware Layer
+- **Microcontroller**: ESP32 (`esp32doit-devkit-v1`), compiled via PlatformIO using the Arduino framework.
+- **Biometric Sensor**: AS608 Optical Fingerprint Sensor.
+- **Handshake & Communication**: 
+  - The ESP32 hosts a SoftAP (`ESP32-Fingerprint-AP`).
+  - Serial communication operates at `115200` baud. The sensor communicates over UART2 (`57600` baud).
+  - Auth payloads are encrypted via **AES-128-CBC** (`MySecr3tAESKey!!` / IV: `0x00-0x0F`) and structured as JSON containing `authenticated`, `timestamp`, `user_id`, and `user_name`.
+  - Transmission methods:
+    1. HTTP POST to connected clients on ports `5000` and `2222` (`/upload_auth`).
+    2. UDP Broadcast to `192.168.4.255` on ports `5000` and `2222`.
+    3. HTTP GET endpoint polling on `http://192.168.4.1/`.
 
-## ⚙️ Prerequisites
+### Host Control & Virtualization Engine
+- **VM Orchestrator (`vmware_os_loader.py`)**: 
+  - Polls `C:\tmp` and `http://192.168.4.1/` for `auth_success.enc`.
+  - Discovers `vmrun.exe` dynamically across standard VMware Workstation/Player paths.
+  - VM operations (`start`, `stop`, `hard/soft` power modes) are strictly authenticated.
+  - **Cleanup Hook**: Upon successful VM start execution, the token files (`auth_success.enc`, `auth_false.enc`, `auth_status.enc`) are immediately consumed and deleted from `C:\tmp` to prevent replay access.
+  - Falls back to `psutil` process termination if `vmrun` soft stops fail.
 
-Before setting up PrivacyNexus, ensure you have the following installed:
-- **Python 3.x:** (with `pip`)
-- **VMware:** VMware Workstation Pro or VMware Workstation Player
-- **PlatformIO:** For building and flashing ESP32 firmware (VS Code extension recommended)
-- **Hardware:** ESP32 Development Board, AS608 Optical Fingerprint Sensor, USB Cables, Jumper Wires.
+### GUI & Telemetry Pipelines
+- **Management Console (`gui_app.py`)**: Built with CustomTkinter, it handles template enrollment via serial commands (`e <id> <name>`, `d <id>`, `l`), device pinging (`ping`), and telemetry monitoring. Includes an emergency admin bypass (`admin123`).
+- **Data Receiver (`http_receiver.py`)**: Listens on TCP ports 5000/2222 for incoming POST requests and UDP ports for broadcasts, while simultaneously polling the ESP32 gateway. Decrypts AES payloads and saves the `.enc` files into `C:\tmp`.
 
----
+## Hardware Wiring Table
 
-## 🔌 Hardware Setup (ESP32 + AS608)
-
-Connect your AS608 fingerprint sensor to the ESP32 using the following typical pinout. Please verify against your specific board's documentation.
-
-| AS608 Pin | Description | ESP32 Pin (Default) |
+| ESP32 Pin | AS608 Sensor / Component | Description |
 | :--- | :--- | :--- |
-| **VCC** | Power (3.3V) | `3V3` |
-| **TX** | Transmit | `RX2` (GPIO 16) |
-| **RX** | Receive | `TX2` (GPIO 17) |
-| **GND** | Ground | `GND` |
-| **WAK** | Wakeup / Touch | (Optional/Unused in basic setup) |
-| **3.3V**| Sensor Power | (Often connected to VCC) |
+| **GPIO 16 (RX2)** | AS608 TX | UART Communication |
+| **GPIO 17 (TX2)** | AS608 RX | UART Communication |
+| **3.3V / 5V** | AS608 VCC | Power Supply |
+| **GND** | AS608 GND | Common Ground |
+| **GPIO 4** | Red LED | Auth Failed Indicator |
+| **GPIO 2** | Green LED | Auth Success Indicator |
+| **GPIO 34** | Pushbutton | Manual scan trigger (Input, Debounced) |
 
-*Check `src/main.cpp` or relevant configuration files if you modified the serial pins.*
+## Virtual Machine Directory Setup
 
----
+The VM architecture is designed to be portable relative to the workspace.
 
-## 🚀 Getting Started & Local Setup
+1. Ensure a directory named `HDD/` exists in the project root. (Note: `HDD/` is git-ignored to prevent pushing massive VM blobs).
+2. Through the **OS Loader GUI**, you can "Build VM & Initialize OS Installation".
+3. This process uses `vmware-vdiskmanager.exe` to provision a `.vmdk` disk and automatically generates a matching `.vmx` configuration specifying OS type, RAM, and CPU parameters.
+4. The generated Virtual Machine folder will be saved inside `HDD/<VM_Name>/` and picked up dynamically by the orchestrator.
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/OvindaSakun/PrivacyNexus.git
-cd PrivacyNexus
-```
+## Setup & Execution Guide
+
+### 1. Flashing Firmware (PlatformIO)
+1. Open the project in VS Code with the PlatformIO extension installed.
+2. The `platformio.ini` is pre-configured for `esp32doit-devkit-v1`.
+3. Connect the ESP32 via USB and click the **Upload** button to flash `src/code.cpp`.
 
 ### 2. Python Environment Setup
-It's recommended to use a virtual environment:
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
+1. Ensure Python 3.x is installed.
+2. Install the required host dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   *(Note: The Python executables also feature auto-dependency resolution on launch for standard environments).*
 
-### 3. Hardware Firmware Flashing
-Open the project in VS Code with the PlatformIO extension installed.
-1. Connect your ESP32 via USB.
-2. Build and upload the firmware using the PlatformIO interface or CLI: `pio run -t upload`.
+### 3. Running the Host Pipeline
+1. Connect the ESP32 hardware to your PC.
+2. Run the main orchestration GUI:
+   ```bash
+   python gui_app.py
+   ```
+3. Run the VM Loader module to manage and launch instances:
+   ```bash
+   python vmware_os_loader.py
+   ```
+4. *(Optional)* Run `python http_receiver.py` for standalone testing of the HTTP/UDP pipeline without the GUI overhead.
 
-### 4. VM Configuration (The `HDD/` Directory)
-Create an `HDD` directory in the root of the project to house your VM files.
-```bash
-mkdir HDD
-```
-Place your configured VMware `.vmx` and `.vmdk` files (Tiny Core or antiX Linux) into this `HDD` directory. Ensure `vmware_os_loader.py` is pointing to the correct `.vmx` path.
+### 4. Build & Distribution
+The repository includes a script to freeze the Python host tools into standalone Windows binaries using `py2exe`.
 
-### 5. Running the Application
-Launch the graphical interface to start the host loader sequence:
-```bash
-python gui_app.py
-```
-*(Alternatively, build standalone executables using `python build_executables.py` and run the resulting `.exe`)*
-
----
-
-## 🔗 Related Repositories
-
-PrivacyNexus relies on an internal ML-driven Data Loss Prevention (DLP) and Host-based Intrusion Detection System (HIDS) running inside the guest Linux environment.
-
-This agent is maintained in a dedicated companion repository:
-
-👉 **[PrivacyNexus-Agent Repository](https://github.com/OvindaSakun/PrivacyNexus-Agent)**
-
-Be sure to clone and configure the Security Agent inside your Guest VM as part of a complete deployment.
+1. Run the build script:
+   ```bash
+   python build_executables.py
+   ```
+2. The build config (`bundle_files: 3`, `compressed: True`) compiles the code and bundles required DLLs.
+3. The script automatically copies the CustomTkinter asset folders (themes, fonts) into the `dist/` folder ensuring the UI styles render correctly.
+4. Standalone executables (`gui_app.exe`, `vmware_os_loader.exe`) will be generated inside the `dist/` directory.
 
 ---
-*Created by [Ovinda Sakun](https://github.com/OvindaSakun)*
+
+**Author:** Ovinda Sakun  
+*Final Year Research Project, BSc (Hons) Computer Networks*
